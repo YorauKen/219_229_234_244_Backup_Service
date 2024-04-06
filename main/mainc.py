@@ -1,15 +1,13 @@
-import os
+import pickle
 import os.path
 from google.auth.transport.requests import Request 
-from google.oauth2.service_account import Credentials
-from googleapiclient.http import MediaIoBaseDownload
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
-import io
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
-
 
 
 #------------------------------------------------------------------------------------------
@@ -17,7 +15,21 @@ SCOPES = ["https://www.googleapis.com/auth/drive"]
 Authorization and Authentication 
 '''
 def Authnenticate() :
-	creds = Credentials.from_service_account_file("cronkube-service.json",scopes=SCOPES)
+	creds = None
+
+	if os.path.exists("../creds/token.pickle"):
+		with open('../creds/token.pickle', 'rb') as token:
+			creds = pickle.load(token)
+
+	if not creds or not creds.valid:
+		if creds and creds.expired and creds.refresh_token:
+			creds.refresh(Request())
+		else: 
+			flow = InstalledAppFlow.from_client_secrets_file("../creds/credentials_cc.json",SCOPES)
+			creds = flow.run_local_server(port = 0)
+				
+		with open("../creds/token.pickle","wb") as token:
+			pickle.dump(creds,token)
 	
 	return creds
 
@@ -46,7 +58,7 @@ def Upload_Folder(service):
 		else :
 			folder_id = response['files'][0]['id']
 		
-		for file in os.listdir('./backup-dir'):
+		for file in os.listdir('../backup-dir'):
 			existing_files = service.files().list(q=f"name = '{file}' and '{folder_id}' in parents",spaces='drive').execute().get('files',[])
 
 			if existing_files:
@@ -57,7 +69,7 @@ def Upload_Folder(service):
 				"parents":[folder_id],
 			}
 
-			media =	MediaFileUpload(f"../backup-dir/{file}")
+			media =	MediaFileUpload(f"backup-dir/{file}")
 			upload_file = service.files().create(body=file_metadata,media_body=media,fields="id").execute()
 			print("Backed up file : ",file)
 
@@ -66,9 +78,6 @@ def Upload_Folder(service):
 		print("Error:"+str(e))
 
 #----------------------------------------------------------------------------------------------------------------
-'''
-List the drive with folders to access
-'''
 def List_Files(creds,service,file_id,indent = ' '):
 	try:
 		response = service.files().list(q=f"'{file_id}' in parents", fields="files(id,name, mimeType)").execute()
@@ -78,6 +87,8 @@ def List_Files(creds,service,file_id,indent = ' '):
 			print("No files found.")
 			return
 		
+		
+		
 		for file in files:
 			if file['mimeType'] == 'application/vnd.google-apps.folder':
 				print(f"{indent}{file['name']} -")
@@ -86,74 +97,8 @@ def List_Files(creds,service,file_id,indent = ' '):
 				
 				print(f"{indent}{file['name']}")
 	except HttpError as error:
+#     # TODO(developer) - Handle errors from drive API.
 		  print(f"An error occurred: {error}")
-
-
-#----------------------------------------------------------------------------
-'''
-Search a folder or file by Name
-'''
-def get_folder_id(service,folder_name):
-	try:
-		response = service.files().list(
-			q = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder'",
-			fields="files(id, name)"
-		).execute()
-		items = response.get('files',[])
-		#print("GET-FOLDER-ID ",items[0]['id'])
-		if items:
-			return items[0]['id']
-		else:
-			return None
-	except HttpError as e:
-		print(f"An error occurred: {e}")
-
-
-def get_file_by_id(service,file_name):
-	try:
-		response = service.files().list(
-			q=f"name='{file_name}'",
-			fields="files(id, name)"
-		).execute()
-		items = response.get('files', [])
-		if items:
-			return items[0]['id']
-		else:
-			print("File not found.")
-			return None
-	except Exception as e:
-		print(f"An error occurred: {e}")
-		return None
-#-------------------------------------------------------------------------------------------------------------------
-'''
-delete a folder by Name
-'''
-def delete_folder(folder_name,service):
-	
-	folder_id = get_folder_id(service,folder_name)
-	try:
-		service.files().delete(fileId=folder_id).execute()
-		print("Folder deleted successfully.")
-	except HttpError as e:
-		print(f"An error occurred: {e}")
-	else:
-		print("Folder not found.")
-	
-#----------------------------------------------------------------------------------------------------------------	
-'''
-delete a file by its name
-'''
-def delete_file(file_name,service):
-	
-	file_id = get_file_by_id(service,file_name)
-	try :
-		service.files().delete(fileId=file_id).execute()
-		print("File deleted successfully.")
-	except HttpError as e:
-		print(f"An error occurred: {e}")
-	else:
-		print("File not found.")
-#-----------------------------------------------------------------------------------------------------------------	
 
 
 def main():
@@ -161,10 +106,6 @@ def main():
 	service = build("drive","v3",credentials=creds)
 	Upload_Folder(service)
 	List_Files(creds,service,"root")
-	# delete_folder("BackupFolder24",service)
-	# delete_file("another-file.txt",service)
-	# folder_id = get_folder_id(service,"BackupFolder24")
-	#List_Files(creds,service,"root")
 
 
 
