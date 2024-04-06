@@ -5,9 +5,10 @@ RUN apt-get update
 
 ENV DISPLAY=host.docker.internal:0.0
 
+WORKDIR /main
 
 RUN pip install google-auth-oauthlib google-api-python-client google-auth-httplib2 
-COPY main.py main.py 
-COPY cronkube-service.json cronkube-service.json
-COPY  backup-dir  backup-dir
-CMD ["python","main.py"]
+
+COPY . /main/
+
+CMD ["python","mainc.py"]
