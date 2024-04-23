@@ -3,22 +3,28 @@ kind: CronJob
 metadata:
   name: backup-cronjob
 spec:
-  schedule: "*/20 * * * *" # Cron expression for running at midnight every day
+  schedule: "*/1 * * * *" 
   jobTemplate:
     spec:
       template:
         spec:
           containers:
           - name: backup-container
-            image: backup # Replace with your Docker image name and tag
-            imagePullPolicy: IfNotPresent  # Adjust according to your image pull policy
-            # Add any environment variables or volume mounts required by your container
-            command:
+            image: hiteshyadavm/backup:v1 
             volumeMounts:
             - name: backup-volume
-              mountPath: /backup-dir  # Mount path in the container
+              mountPath: /backup-dir 
+            - name: secret-volume
+              mountPath: /creds
+              readOnly: true
           volumes:
           - name: backup-volume
             persistentVolumeClaim:
-              claimName: backup-pvc  # Name of the PersistentVolumeClaim to mount
-          restartPolicy: OnFailure  # Restart the container if it fails
+              claimName: backup-pvc  
+          - name: secret-volume
+            secret:
+              secretName: creds
+          restartPolicy: OnFailure  
+
+
+# kubectl create secret generic creds --from-file=creds/token.pickle --from-file=creds/credentials_cc.json
